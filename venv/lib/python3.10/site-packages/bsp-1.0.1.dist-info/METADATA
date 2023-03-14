@@ -1,0 +1,137 @@
+Metadata-Version: 2.1
+Name: bsp
+Version: 1.0.1
+Summary: Basic Socket Protocol
+Home-page: https://github.com/hyurl/bsp-py
+Author: Ayon Lee
+Author-email: i@hyurl.com
+License: UNKNOWN
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+
+# Basic Socket Protocol
+
+This is a Python3 version of the original BSP protocol distributed in JavaScript,
+for more detail of the protocol and supported data types, view it on GitHub:
+[bsp](https://github.com/hyurl/bsp).
+
+The Node.js BSP was introduced, in the first place, to solve the problem that
+when transporting data over sockets in Node.js, the under-hood algorithm will
+automatically split the data into segments or stick multiple data into one piece,
+trying to optimize the network usage. Which however causes many pains and
+mistakes when transferring the data.
+
+The purpose of BSP is two encode the data, and no matter how it may be sticked
+or splitted during the transmission, the remote end can still be able to decode
+it as-is when receiving it or them in a stream. And more over, allow the
+transport of arbitrary data, instead of only string or binary.
+
+The Python version of BSP, is meant to allow transmitting data between Python
+and Node.js/Browser, and any other environments that has BSP implemented.
+
+## API
+
+```py
+# Encodes any number of data into one chunk of bytearray.
+def encode(*data) -> bytearray:
+    pass
+
+# Decodes the input buffer and returns only the first item of the result.
+def decode(buf: bytearray) -> any:
+    pass
+
+# Continuously decodes input buffers and yields any decoded data during the
+# process.
+def decode(buf: bytearray, temp: list) -> iter:
+    pass
+```
+
+## Example
+
+```py
+import bsp
+
+# encode and decode string
+buf = bsp.encode("Hello, World!")
+res = bsp.decode(buf) # Hello, World!
+
+# encode and decode number
+buf = bsp.encode(12345)
+res = bsp.decode(buf) # 12345
+
+# encode and decode boolean and None
+buf = bsp.encode(True)
+res = bsp.decode(buf) # True
+buf = bsp.encode(False)
+res = bsp.decode(buf) # False
+buf = bsp.encode(None)
+res = bsp.decode(buf) # None
+
+# encode and decode dict
+buf = bsp.encode({ "foo": "bar" })
+res = bsp.decode(buf) # { "foo": "bar" }
+
+# encode and decode list
+buf = bsp.encode(["foo", "bar"])
+res = bsp.decode(buf) # ["foo", "bar"]
+
+# encode and decode binary
+buf = bsp.encode(bytearray([1, 2, 3, 4, 5]))
+res = bsp.decode(buf) # bytearray(b'\x01\x02\x03\x04\x05')
+
+
+# encode and decode multiple data at once
+buf = bsp.encode(
+    "Hello, World!",
+    12345,
+    12345.678,
+    1111111111111111111111111111111111111,
+    True,
+    False,
+    None,
+    { "foo": "bar" },
+    ["foo", "bar"],
+    bytearray([1, 2, 3, 4, 5])
+)
+
+# temp=[None]*3 must be provided in this case
+for item in bsp.decode(buf, [None]*3):
+    print(item) # will print the data accordingly
+
+
+# Encode a large file and split it into chunks, then decode the chunks as a
+# stream.
+file = open("test.bin", "rb")
+src = bytearray(file.read()) # file.read() returns bytes, must cast to bytearray
+buf = bsp.encode(src)
+segments = []
+temp = [None]*3 # use a temp outside the stream processor to keep imcomplete data
+
+# Split the file into several segments, each contians 64kb data of maximum length
+for i in range(0, len(buf), 65535):
+    segments.append(buf[i:i+65535])
+
+# simulate a stream of segments
+for segment in segments:
+    for item in bsp.decode(segment, temp):
+        print(item) # only run once in this case and print the only input (src)
+```
+
+### bytes vs. bytearray
+
+As being addressed above, when reading binary from a file, `file.read()` returns
+type of `bytes`, and even more pratically, it's more easy for a person to create
+a bytes instance than creating a bytearray, just use the `b` prefix for string.
+
+However, this type will not be compatibal with the original Node.js BSP, and it's
+hard to determine whether it should be encoded as string or as binary. So,
+for more rational concerns, this package does not support `bytes` straight
+forward, a user must be explictly cast it to either a string or a bytearray
+according to what he needs.
+
+For more detail about BSP, see [bsp](https://github.com/hyurl/bsp).
+
